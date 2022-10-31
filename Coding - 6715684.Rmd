@@ -1,0 +1,992 @@
+
+Required libraries
+```{r}
+library(Hmisc) #for correlation matrix
+library(dplyr)
+library(funModeling)
+library(GGally)
+library(tidyverse)
+library(scales)
+library(MLmetrics)
+library(caret)
+library(C50)
+library(class)
+library(e1071)
+library(SuperLearner)
+library(ranger)
+library(kernlab)
+library(ipred)
+library(arm)
+library(rcompanion)
+library(ROSE) #data balancing
+library(ggplot2)
+library(ggExtra)
+library(RColorBrewer)
+library(cowplot)
+library(ggpubr)
+library(gridExtra)
+library(tidyr)
+library(broom)
+library(glmnet)
+library(lares)
+library(RWeka)
+```
+
+```{r}
+# read in the data
+online_shoppers_intention_1 <- read.csv("C:\\Users\\vt00196\\OneDrive - University of Surrey\\Desktop\\Online Shoppers Prediction\\osi.csv",stringsAsFactors=T)
+
+```
+
+```{r cars}
+shopp = online_shoppers_intention_1
+shop = shopp
+
+#Creating a duplicate dataset to save the original dataset
+shop1 = shop
+shop1$Month = as.factor(shop1$Month)
+shop1$VisitorType = as.factor(shop1$VisitorType)
+shop1$Revenue = as.factor(shop1$Revenue)
+shop1$Weekend = as.factor(shop1$Weekend)
+shop1$Revenue = as.factor(shop1$Revenue)
+#summary of dataset
+summary(shop1)
+
+```
+
+It is observed from the table that the means are much closer to the minimum values of the attributes than to the maximums, which tells that the distributions are not normal.
+Highs are well outside the 3rd quartile on many variables which tells that there will be outliers.
+we also have negative value at least in several variables related to time, which apparently doesn't make any sense. This is explained properly through graphs.
+
+```{r}
+#two-way table for summary statistics
+d = shop1 %>%                               # Summary by group using purrr
+  split(.$Revenue) %>%
+  map(summary)
+d
+
+```
+
+
+## Including Plots
+Dimension of dataset
+
+```{r}
+dim(shop1)
+
+```
+
+Check whether they have any missing values
+
+```{r}
+sum(is.na(shop))
+colSums(is.na(shop))
+#there are no missing values in the dataset
+```
+
+```{r}
+#missing value analysis 
+
+sapply(data, function(x) sum(is.na(x)))
+data <- na.omit(data)
+str(data)
+```
+
+
+Checking target variable
+```{r}
+table(shop1$Revenue)
+#we can see that the categorical variables are unbalanced. Mainly it can be seen in the target variable.
+barplot <- ggplot(shop1, aes(x=Revenue, fill = Revenue)) + geom_bar(position="dodge") +  theme_dark()
+barplot
+```
+we can see that the categorical variables are unbalanced. Mainly it can be seen in the target variable.
+`   
+
+```{r}
+#frequency & freq plots for cactegorical varibles
+#################################################################
+#In dataset operating system, Browser and region have numerical value by which we can't give proper opinion and analysis the data. so we google top list for operating system, browser and region and replaced that values with these names
+#Here we change Operating system value from numerical to caterogical
+#data is taken from Google. Top Operating systems
+shopc = shop1
+#"MS-Windows","Ubuntu","Mac OS","Deepin","Free BSD","Chrome OS","CentOS","Debian"
+shopc$OperatingSystems[shopc$OperatingSystems == 1] = "MS-Windows"
+shopc$OperatingSystems[shopc$OperatingSystems == 2] = "Ubuntu"
+shopc$OperatingSystems[shopc$OperatingSystems == 3] = "Mac OS"
+shopc$OperatingSystems[shopc$OperatingSystems == 4] = "Deepin"
+shopc$OperatingSystems[shopc$OperatingSystems == 5] ="Free BSD"
+shopc$OperatingSystems[shopc$OperatingSystems == 6] ="Chrome OS"
+shopc$OperatingSystems[shopc$OperatingSystems == 7] ="CentOS"
+shopc$OperatingSystems[shopc$OperatingSystems == 8] ="Debian"
+
+#Here we change Operating system value from numerical to caterogical
+#data is taken from Google. Top browser
+
+shopc$Browser[shopc$Browser == 1] = "Firefox"
+shopc$Browser[shopc$Browser == 2] = "Google Chrome"
+shopc$Browser[shopc$Browser == 3] = "Microsoft Edge"
+shopc$Browser[shopc$Browser == 4] = "Apple Safari"
+shopc$Browser[shopc$Browser == 5] = "Opera"
+shopc$Browser[shopc$Browser == 6] = "Brave"
+shopc$Browser[shopc$Browser == 7] = "UCBrowser"
+shopc$Browser[shopc$Browser == 8] = "DuckDuckgo"
+shopc$Browser[shopc$Browser == 9] = "Chromium"
+shopc$Browser[shopc$Browser == 10] = "Epic"
+shopc$Browser[shopc$Browser == 11] = "Internet Explorer"
+shopc$Browser[shopc$Browser == 12] = "Tor Browser"
+shopc$Browser[shopc$Browser == 13] = "Maxthon"
+
+#Here we change Region values to top countries in which internet is used more
+#data is taken from Google. 
+#"China","Indonesia","India","United States","Brazil","Russia","Japan","Nigeria","Mexico"
+shopc$Region[shopc$Region == 1] = "China"
+shopc$Region[shopc$Region == 2] = "Indonesia"
+shopc$Region[shopc$Region == 3] = "India"
+shopc$Region[shopc$Region == 4] = "United States"
+shopc$Region[shopc$Region == 5] = "Brazil"
+shopc$Region[shopc$Region == 6] = "Russia"
+shopc$Region[shopc$Region == 7] = "Japan"
+shopc$Region[shopc$Region == 8] = "Nigeria"
+shopc$Region[shopc$Region == 9] = "Mexico"
+
+shopc$TrafficType = as.factor(shopc$TrafficType)
+#best operating system for website is ubuntu, MS-window, Mac os. almost 95% of the world is using these 3 operating system which is good for website.
+#Google Chrome is used by most of the people to access website
+#china and india are top countries where interent is used more, it is obvious as these have have of the world population. To increase revenue we need to work on brazil and nigeria
+print(freq(shopc))
+#visitor type- on website people visit more and more so dataset contain more returing visitor
+#people visit site in non weekend days
+```
+
+
+```{r}
+#We will perform univariate and bivariate analysis with the target variable on the categorical variables.
+#Month
+library(scales)
+shopc = shop1
+a = ggplot(shopc, 
+       aes(x = Month, 
+           fill = Month)) + 
+  geom_bar()+
+  labs(y = "Count", 
+       x = "Months",
+       title = "Variable Months") +
+  scale_x_discrete(limits=c("Feb","Mar","May", "June","Aug","Sep","Oct","Nov","Dec"))+
+  theme_minimal(base_size = 20)
+
+a
+
+b = ggplot(shopc, 
+            aes(x = Month, 
+                fill = Revenue)) + 
+  coord_flip()+
+  geom_bar(position="fill")  +
+  scale_y_continuous(breaks = seq(0, 1, .2), 
+                     label = percent) +
+  scale_fill_brewer(palette = "Set2") +
+  labs(y = "Percentage", 
+       fill = "Revenue",
+       x = "Months",
+       title = "Proportions of Revenue by Months") +
+    scale_x_discrete(limits=c("Feb","Mar","May", "June","Aug","Sep","Oct","Nov","Dec"))+
+  theme_minimal(base_size = 20)
+
+b
+grid.arrange(a,b, ncol=2, nrow=1)
+#CHI SQUARED TEST
+chisq.test(shop1$Month, shop1$Revenue, correct=FALSE)
+
+#The p-value is 2.2e-16 and therefore we can reject null hypothesis and can conclude that these two variables are significant and dependent to each other.
+
+#from the above Variables we have several conclusions
+#The data for Months in an year is not distributed properly as there are missing data for january month and April month.
+```
+
+
+```{r}
+#Operating systems
+a = ggplot(shopc, 
+       aes(x = OperatingSystems, 
+           fill = OperatingSystems)) + 
+  geom_bar()+
+  labs(y = "Count", 
+       x = "Months",
+       title = "Variable Operating Systems") +
+    scale_x_discrete(limits=c("MS-Windows","Ubuntu","Mac OS","Deepin","Free BSD","Chrome OS","CentOS","Debian"))+
+  theme_minimal(base_size = 20)+
+  theme(legend.position = c(0.85,0.70))
+
+a
+
+b = ggplot(shopc, 
+            aes(x = OperatingSystems, 
+                fill = Revenue)) + 
+  coord_flip()+
+  geom_bar(position="fill")  +
+  scale_y_continuous(breaks = seq(0, 1, .2), 
+                     label = percent) +
+  scale_fill_brewer(palette = "Set2") +
+  labs(y = "Percentage", 
+       fill = "Revenue",
+       x = "Months",
+       title = "Proportions of Revenue by Operating Systems") +
+    scale_x_discrete(limits=c("MS-Windows","Ubuntu","Mac OS","Deepin","Free BSD","Chrome OS","CentOS","Debian"))+
+  theme_minimal(base_size = 20)
+
+b
+grid.arrange(a,b, ncol=2, nrow=1)
+#CHI SQUARED TEST
+chisq.test(shop1$OperatingSystems, shop1$Revenue, correct=FALSE)
+#The p-value is 1.416e-13, since it is less than 0.05 which is the significant level. Null hypothesis can be rejected and conclude that operating system and revenue are dependent to each other.
+#It is observed that the categories of operating system are not balanced even though chi squared test shown significant level, we may still have problems with minority categories like CentOS, Debian etc.
+```
+
+```{r}
+#Region
+a = ggplot(shopc, 
+           aes(x = Region, 
+               fill = Region)) + 
+  geom_bar()+
+  labs(y = "Count", 
+       x = "Region",
+       title = "Variable Region") +
+  scale_x_discrete(limits=c("China","Indonesia","India","United States",
+                            "Brazil","Russia","Japan","Nigeria","Mexico"))+
+  theme_minimal(base_size = 20)+
+  theme(legend.position = c(0.85,0.70))
+
+a
+
+b = ggplot(shopc, 
+           aes(x = Region, 
+               fill = Revenue)) + 
+  coord_flip()+
+  geom_bar(position="fill")  +
+  scale_y_continuous(breaks = seq(0, 1, .2), 
+                     label = percent) +
+  scale_fill_brewer(palette = "Set2") +
+  labs(y = "Percentage", 
+       fill = "Revenue",
+       x = "Region",
+       title = "Proportions of Revenue by Region") +
+  scale_x_discrete(limits=c("China","Indonesia","India","United States",
+                            "Brazil","Russia","Japan","Nigeria","Mexico"))+
+  theme_minimal(base_size = 20)
+
+b
+grid.arrange(a,b, ncol=2, nrow=1)
+#CHI SQUARED TEST
+chisq.test(shop1$Region, shop1$Revenue, correct=FALSE)
+
+#Here the p-value is greater than significant level 0.05 which is 0.3214 and thus null hypothesis which says that there is no significance between the variables and both are independent to each is accepted.
+#there is not much difference between the categories in bivariate analysis and also is concluded from the chi squared test that Region and Revenue variables are independent to each other.
+#The conclusion is that this variable can be removed while building predictive model
+```
+
+
+```{r}
+#TrafficType
+a = ggplot(shopc, 
+           aes(x = TrafficType, 
+               fill = TrafficType)) + 
+  geom_bar()+
+  labs(y = "Count", 
+       x = "TrafficType",
+       title = "Variable TrafficType") +
+  theme_minimal(base_size = 20)
+
+a
+
+b = ggplot(shopc, 
+           aes(x = TrafficType, 
+               fill = Revenue)) + 
+  coord_flip()+
+  geom_bar(position="fill")  +
+  scale_y_continuous(breaks = seq(0, 1, .2), 
+                     label = percent) +
+  scale_fill_brewer(palette = "Set2") +
+  labs(y = "Percentage", 
+       fill = "Revenue",
+       x = "Traffic Type",
+       title = "Proportions of Revenue by TrafficType") +
+  theme_minimal(base_size = 20)
+
+b
+grid.arrange(a,b, ncol=2, nrow=1)
+#CHI SQUARED TEST
+chisq.test(shop1$TrafficType, shop1$Revenue, correct=FALSE)
+#the p-value of Traffic types is 2.2e-16 and thus null hypothesis is accepted and concludes that revenue & traffic types are not dependent variable. 
+#This variable is not suitable for building a predictive model. 
+```
+
+```{r}
+#Similarly the chi squared test is done betweeen revenue and visitor type and the p-value is greater than the significant level therefore null hypothesis cannot be rejected and therefore we can conclude both are independent variable, not suitable for predictive model.
+```
+
+```{r}
+#histogram for all continous variables
+shop_num = shop1[1:10]
+
+plot_num(shop_num)
+
+```
+
+
+
+```{r}
+#frequency & freq plots for cactegorical varibles
+#################################################################
+#In dataset operating system, Browser and region have numerical value by which we can't give proper opinion and analysis the data. so we google top list for operating system, browser and region and replaced that values with these names
+#Here we change Operating system value from numerical to caterogical
+#data is taken from Google. Top Operating systems
+shopc = shop1
+#"MS-Windows","Ubuntu","Mac OS","Deepin","Free BSD","Chrome OS","CentOS","Debian"
+shopc$OperatingSystems[shopc$OperatingSystems == 1] = "MS-Windows"
+shopc$OperatingSystems[shopc$OperatingSystems == 2] = "Ubuntu"
+shopc$OperatingSystems[shopc$OperatingSystems == 3] = "Mac OS"
+shopc$OperatingSystems[shopc$OperatingSystems == 4] = "Deepin"
+shopc$OperatingSystems[shopc$OperatingSystems == 5] ="Free BSD"
+shopc$OperatingSystems[shopc$OperatingSystems == 6] ="Chrome OS"
+shopc$OperatingSystems[shopc$OperatingSystems == 7] ="CentOS"
+shopc$OperatingSystems[shopc$OperatingSystems == 8] ="Debian"
+
+#Here we change Operating system value from numerical to caterogical
+#data is taken from Google. Top browser
+
+shopc$Browser[shopc$Browser == 1] = "Firefox"
+shopc$Browser[shopc$Browser == 2] = "Google Chrome"
+shopc$Browser[shopc$Browser == 3] = "Microsoft Edge"
+shopc$Browser[shopc$Browser == 4] = "Apple Safari"
+shopc$Browser[shopc$Browser == 5] = "Opera"
+shopc$Browser[shopc$Browser == 6] = "Brave"
+shopc$Browser[shopc$Browser == 7] = "UCBrowser"
+shopc$Browser[shopc$Browser == 8] = "DuckDuckgo"
+shopc$Browser[shopc$Browser == 9] = "Chromium"
+shopc$Browser[shopc$Browser == 10] = "Epic"
+shopc$Browser[shopc$Browser == 11] = "Internet Explorer"
+shopc$Browser[shopc$Browser == 12] = "Tor Browser"
+shopc$Browser[shopc$Browser == 13] = "Maxthon"
+
+#Here we change Region values to top countries in which internet is used more
+#data is taken from Google. 
+
+shopc$Region[shopc$Region == 1] = "China"
+shopc$Region[shopc$Region == 2] = "Indonesia"
+shopc$Region[shopc$Region == 3] = "India"
+shopc$Region[shopc$Region == 4] = "United States"
+shopc$Region[shopc$Region == 5] = "Brazil"
+shopc$Region[shopc$Region == 6] = "Russia"
+shopc$Region[shopc$Region == 7] = "Japan"
+shopc$Region[shopc$Region == 8] = "Nigeria"
+shopc$Region[shopc$Region == 9] = "Mexico"
+
+shopc$TrafficType = as.factor(shopc$TrafficType)
+#best operating system for website is ubuntu, MS-window, Mac os. almost 95% of the world is using these 3 operating system which is good for website.
+#Google Chrome is used by most of the people to access website
+#china and india are top countries where interent is used more, it is obvious as these have have of the world population. To increase revenue we need to work on brazil and nigeria
+print(freq(shopc))
+#visitor type- on website people visit more and more so dataset contain more returing visitor
+#people visit site in non weekend days
+```
+
+UNIVARIATE &BIVARIATE ANALYSIS
+```{r}
+#Month on basis of revenue
+a = ggplot(shopc, 
+       aes(x = Month, 
+           fill = Month)) + 
+  geom_bar()+
+  labs(y = "Count", 
+       x = "Months",
+       title = "Revenue by Months") +
+  theme_minimal()
+
+a
+
+b = ggplot(shopc, 
+            aes(x = Month, 
+                fill = Revenue)) + 
+  coord_flip()+
+  geom_bar(position="fill")  +
+  scale_y_continuous(breaks = seq(0, 1, .2), 
+                     label = percent) +
+  scale_fill_brewer(palette = "Set2") +
+  labs(y = "Percentage", 
+       fill = "Revenue",
+       x = "Months",
+       title = "Proportions of Revenue by Months") +
+  theme_minimal()
+
+b
+grid.arrange(a,b, ncol=2, nrow=1)
+
+```
+
+```{r}
+#######Operating Systems
+a = ggplot(shopc, 
+           aes(x = OperatingSystems, 
+               fill = OperatingSystems)) + 
+  geom_bar()+
+  labs(y = "Count", 
+       x = "Operating Systems",
+       title = "Variable Operating Systems") +
+  theme_minimal()
+
+a
+
+b = ggplot(shopc, 
+           aes(x = OperatingSystems, 
+               fill = Revenue)) + 
+  coord_flip()+
+  geom_bar(position="fill")  +
+  scale_y_continuous(breaks = seq(0, 1, .2), 
+                     label = percent) +
+  scale_fill_brewer(palette = "Set2") +
+  labs(y = "Percentage", 
+       fill = "Revenue",
+       x = "Operating Systems",
+       title = "Proportions of Revenue by Operating Systems") +
+  theme_minimal()
+
+b
+grid.arrange(a,b, ncol=2, nrow=1)
+
+```
+
+```{r}
+#CHI SQUARED TEST
+chisq.test(shop1$OperatingSystems, shop1$Revenue, correct=FALSE)
+```
+
+```{r}
+#Region
+a = ggplot(shopc, 
+           aes(x = Region, 
+               fill = Region)) + 
+  geom_bar()+
+  labs(y = "Count", 
+       x = "Region",
+       title = "Variable Region") +
+  theme_minimal()
+
+a
+
+b = ggplot(shopc, 
+           aes(x = Region, 
+               fill = Revenue)) + 
+  coord_flip()+
+  geom_bar(position="fill")  +
+  scale_y_continuous(breaks = seq(0, 1, .2), 
+                     label = percent) +
+  scale_fill_brewer(palette = "Set2") +
+  labs(y = "Percentage", 
+       fill = "Revenue",
+       x = "Region",
+       title = "Proportions of Revenue by Region") +
+  theme_minimal()
+
+b
+grid.arrange(a,b, ncol=2, nrow=1)
+
+
+```
+
+
+```{r}
+#CHI SQUARED TEST
+chisq.test(shop1$Region, shop1$Revenue, correct=FALSE)
+```
+
+```{r}
+#TrafficType
+a = ggplot(shopc, 
+           aes(x = TrafficType, 
+               fill = TrafficType)) + 
+  geom_bar()+
+  labs(y = "Count", 
+       x = "TrafficType",
+       title = "Variable TrafficType") +
+  theme_minimal()
+
+a
+
+b = ggplot(shopc, 
+           aes(x = TrafficType, 
+               fill = Revenue)) + 
+  coord_flip()+
+  geom_bar(position="fill")  +
+  scale_y_continuous(breaks = seq(0, 1, .2), 
+                     label = percent) +
+  scale_fill_brewer(palette = "Set2") +
+  labs(y = "Percentage", 
+       fill = "Revenue",
+       x = "Traffic Type",
+       title = "Proportions of Revenue by TrafficType") +
+  theme_minimal()
+
+b
+grid.arrange(a,b, ncol=2, nrow=1)
+```
+
+```{r}
+#CHI SQUARED TEST
+chisq.test(shop1$TrafficType, shop1$Revenue, correct=FALSE)
+```
+
+```{r}
+###### Month Vs Visitors Type
+shopd = shopc
+shopd = shop1
+shopd$VisitorType <- factor(shopd$VisitorType, levels = c("Returning_Visitor", "New_Visitor", "Other"))
+barplot = ggplot(shopd, aes(x=Month, fill = VisitorType)) + 
+  geom_bar(position="dodge") + 
+  theme_minimal(base_size = 20)+
+  scale_fill_brewer(palette = "Set2")+
+  labs(y = "Count", 
+       x = "Months",
+       title = "Variable Months") +
+  scale_x_discrete(limits=c("Feb","Mar","May", "June","Aug","Sep","Oct","Nov","Dec"))
+
+barplot
+
+#Most of the returning visitors are from the month may followed by nov
+#most of the new visitors are from the month nov
+```
+
+```{r}
+#################################  Month vs Special Day  ##################
+shopd$SpecialDay = as.factor(shopd$SpecialDay)
+barplot2 = ggplot(shopd, aes(x=Month, fill = SpecialDay)) + 
+  geom_bar(position="dodge") + 
+  scale_fill_brewer(palette = "Set2")+
+  labs(y = "Count", 
+       x = "Months",
+       title = "Variable Months") +
+  scale_x_discrete(limits=c("Feb","Mar","May", "June","Aug","Sep","Oct","Nov","Dec"))+
+  theme_minimal(base_size = 20)
+
+barplot2
+```
+
+
+```{r}
+#Correlation Martix - method 1
+dat = shop1
+
+dat$Month = as.numeric(dat$Month)
+dat$VisitorType = as.numeric(dat$VisitorType)
+dat$Weekend = as.numeric(dat$Weekend)
+dat$Revenue = as.numeric(dat$Revenue)
+sapply(dat, class)
+m = cor(dat)
+ggcorr(m)
+
+```
+
+```{r}
+#Correlation Matrix - method 2
+library(corrplot)
+library(RColorBrewer)#required libaries
+
+cor_mat <-
+  dat %>% 
+  dplyr::select(where(is.numeric)) %>% 
+  cor(use = "pairwise.complete.obs") 
+
+corrplot(
+  title = "\n\nCorrelation Matrix",
+  cor_mat,
+    method = "number",
+  order = "alphabet",
+  type = "lower",
+  diag = FALSE,
+  number.cex = 0.7,
+  tl.cex = 0.8,
+  tl.col = "darkgreen",
+  addgrid.col = "gray"
+)
+
+```
+
+
+```{r}
+#Correlation of Revenue_TRUE
+library(lares)
+satis_corr <- corr_var(shop1, 
+                       Revenue)
+satis_corr
+#Page value is an imp feature in this dataset. it contains most of the true values. Increase in pagevalue, increase in transaction.
+```
+
+```{r}
+# display top 10 couples of variables by correlation coefficient at 5% significant level
+cross.correlation = corr_cross(shop1,
+                     max_pvalue = 0.05, 
+                     top = 10 )
+cross.correlation
+#Bouncerates
+```
+
+```{r}
+#Relation bw BounceRates & ExitRates
+#from the above correlation graph it is observed that bounce rate and exit rate are highly correlated 
+
+#install.packages("ggExtra")
+library(ggplot2)
+library(ggExtra)
+library(RColorBrewer)
+library(cowplot)
+library(ggpubr)
+
+p <- ggplot(shopc) +
+  geom_point(aes(x = BounceRates, y = ExitRates, color = Revenue), alpha = 0.6, shape = 16) +  
+  scale_color_brewer(palette = "Dark2") + 
+  theme_bw() +
+  theme(legend.position = "bottom") + 
+  labs(x = "BounceRates", y = "ExitRates") 
+p
+
+ggMarginal(p, type = "density", groupColour = TRUE, groupFill = TRUE)
+```
+
+```{r}
+#Relation bw BounceRates & ExitRates (Method 2)
+options(repr.plot.width = 8, repr.plot.height = 5)
+g = ggplot(data = shopc, mapping = aes(x = BounceRates, y = ExitRates)) +
+  geom_point(mapping = aes(color = Revenue)) + geom_smooth(se = TRUE, alpha = 0.5) +
+  theme_light(base_size = 20) + ggtitle("Relationship between Exit Rates and Bounce Rates") + 
+  xlab("Bounce Rates") + ylab("Exit Rates") + 
+  geom_text(mapping = aes(x = 0.15, y = 0.05, label = "Correlation = 0.913"))
+ggMarginal(g, type = "density", groupColour = TRUE, groupFill = TRUE)
+```
+
+```{r}
+###SCATTERPLOT of Productrelated & Productrelated-duration by Revenue
+q <- ggplot(shopc) +
+  geom_point(aes(x = ProductRelated, y = ProductRelated_Duration, color = Revenue), alpha = 0.6, shape = 16) +  
+  scale_color_brewer(palette = "Dark2") + 
+  theme_bw() +
+  theme(legend.position = "bottom") + 
+  labs(x = "Product Related", y = "Product Related Duration")+
+  theme_light(base_size = 20)
+q
+```
+
+```{r}
+###SCATTERPLOT
+pp <- ggplot(shopc) +
+  geom_point(aes(x = Administrative, y = Administrative_Duration, color = Revenue), alpha = 0.6, shape = 16) +  
+  scale_color_brewer(palette = "Set2") + 
+  theme_bw() +
+  theme(legend.position = "bottom") + 
+  labs(x = "Administrative", y = "Administrative_Duration") +
+  theme_minimal(base_size = 20)
+pp
+#It seems very less people visited the page and
+#maximum number of people spend very less time (in seconds) on account management
+```
+
+
+```{r}
+#Effect of loyal customers and "weekend syndrome"
+options(repr.plot.width = 10, repr.plot.height = 6)
+p10 <- ggplot(data = shopc, mapping = aes(x = Revenue)) +
+  geom_bar(mapping = aes(fill = VisitorType)) +
+  theme_light() +
+  ggtitle("Revenue based on visitor type") +
+  xlab("Revenue status (0/1)") +
+  ylab("Visitors") +
+  theme(legend.position = "bottom") 
+
+options(repr.plot.width = 10, repr.plot.height = 6)
+p20 <- ggplot(data = shopc, mapping = aes(x = Revenue)) +
+  geom_bar(mapping = aes(fill = Weekend)) +
+  theme_light() +
+  ggtitle("Revenue based on weekend status") +
+  xlab("Revenue status (0/1)") +
+  ylab("Visitors") +
+  theme(legend.position = "bottom")
+
+grid.arrange(p10,p20, nrow = 1)
+```
+
+```{r}
+#Trend line for revenue status based on months
+options(repr.plot.width = 8, repr.plot.height = 5)
+
+trend <- data.frame(table(shopc$Month, shopc$Revenue))
+names(trend) <- c("Months", "Revenue", "Frequency")
+ggplot(data = trend, mapping = aes(x = Months, y = Frequency)) + geom_line(mapping = aes(color = Revenue, group = Revenue), lwd = 1) + geom_point(mapping = aes(color = Revenue, group = Revenue, size = 0.1), show.legend = FALSE) + theme_light() + scale_y_continuous(breaks = seq(from = 0, to = 4000, by = 500)) + ggtitle("Trend line for revenue status based on months") + xlab("Months") + ylab("Visitors") 
+
+```
+
+```{r}
+#trend line for visitor type based on months 
+trend <- data.frame(table(shopc$VisitorType, shopc$Month))
+names(trend) <- c("VisitorType", "Month", "Frequency")
+ggplot(data = trend, mapping = aes(x = Month, y = Frequency)) + geom_line(mapping = aes(color = VisitorType, group = VisitorType), lwd = 1) + geom_point(mapping = aes(color = VisitorType, group = VisitorType, size = 0.1), show.legend = FALSE) + theme_light() + scale_y_continuous(breaks = seq(from = 0, to = 4000, by = 500)) + ggtitle("Trend line for visitor type based on months") + xlab("Months") + ylab("Visitors")
+```
+
+
+```{r}
+#this write after correlation graph
+#Revenue vs pagevalues
+ggplot(data=shop1, mapping=aes(x=PageValues, y=Revenue, fill = Revenue)) + 
+  stat_summary(fun.data=mean_sdl, geom="bar")
+#page value is an important feature in the dataset. It contains most of the true values. Increase in page value, increase in transaction
+```
+
+
+
+
+```{r}
+library(scales)
+p1 = ggplot(shopc, 
+       aes(x = Month, 
+           fill = Revenue)) + 
+   coord_flip()+
+ geom_bar(position="fill")  +
+  scale_y_continuous(breaks = seq(0, 1, .2), 
+                     label = percent) +
+  scale_fill_brewer(palette = "Set2") +
+  labs(y = "Percentage", 
+       fill = "Revenue",
+       x = "Months",
+       title = "Proportions of Revenue by Months") +
+  theme_minimal()
+
+p1
+#here we see that, In Nov people buy things from website. But in Feb people don't buy, and in feb highest people are return visitor. so we have to do something to increase in feb month
+
+p2 = ggplot(shopc, 
+       aes(x = Browser, 
+           fill = Revenue)) + 
+ geom_bar(position="fill")  +
+  scale_y_continuous(breaks = seq(0, 1, .2), 
+                     label = percent) +
+  scale_fill_brewer(palette = "Set2") +
+   coord_flip()+
+  labs(y = "Percentage", 
+       fill = "Revenue",
+       x = "Browser",
+       title = "Proportions of Revenue by Browser") +
+  theme_minimal()
+p2
+library(gridExtra)
+grid.arrange(p1, p2, ncol=2, nrow=1)
+```
+
+Outliers
+```{r}
+shop_nume<-select_if(shop1,is.numeric)
+cleaned_num_p<-shop_nume %>% gather(variable,values,1:14 )
+options(repr.plot.width = 14, repr.plot.height = 8)
+
+ggplot(cleaned_num_p)+
+  geom_boxplot(aes(x=variable,y=values),fill="cadetblue") + 
+  facet_wrap(~variable,ncol=6,scales="free") + 
+  theme(strip.text.x = element_blank(),
+        text = element_text(size=14))
+
+```
+
+Handling Outliers
+1st sqrt transformation
+```{r}
+#log transformation
+
+shop_log = shop1
+
+shop_log$Weekend = as.numeric(shop_log$Weekend)
+shop_log$Revenue = as.factor(shop_log$Revenue)
+sapply(shop_log,class)
+
+t_log = log10(select_if(shop_log,is.numeric)+1)
+
+
+cleaned_t_log<-t_log %>% gather(variable,values,1:15 )
+options(repr.plot.width = 14, repr.plot.height = 8)
+
+ggplot(cleaned_t_log)+
+  geom_boxplot(aes(x=variable,y=values),fill="cadetblue") + 
+  facet_wrap(~variable,ncol=6,scales="free") + 
+  theme(strip.text.x = element_blank(),
+        text = element_text(size=14))
+
+model = lm(data = shop1, Revenue~ Administrative+ Administrative_Duration+
+             Informational+ Informational_Duration + ProductRelated + 
+             ProductRelated_Duration+ BounceRates +ExitRates +PageValues+ SpecialDay
+           +TrafficType)
+
+```
+
+
+Feature Selection
+```{r}
+xtrain = t_log 
+xtrain <- as.matrix(xtrain) #converting to matrix
+shop11 = shop1
+shop11$Revenue = as.numeric(shop11$Revenue)
+shop11$Revenue = as.factor(shop11$Revenue)
+ytrain = shop11$Revenue
+#lasso regression
+
+#install.packages("glmnet")
+library(glmnet)
+#cross validation to find optimal lambda
+lasreg = cv.glmnet(x= xtrain,y = ytrain,family = c("binomial"), aplha = 1,
+                   nlambda = 100)
+
+#In the plot we can see little division plots where best parameters are
+#going to lie, left min lamda & right 1 standard error
+plot(lasreg)
+
+
+#fit values
+fit = glmnet(x= xtrain,y = ytrain,family = c("binomial"), aplha = 1,
+             lambda = lasreg$lambda.1se)
+
+fit$beta[,1]   
+
+```
+
+```{r}
+##pic representation of feature selection
+library(ggplot2)
+library(tidyverse)
+library(tidyr)
+library(broom)
+#pos & neg correlated variables related to their coefficients
+coef(lasreg, s = "lambda.1se")%>%
+  tidy()%>%
+  filter(row !="(Intercept)")%>%
+  ggplot(aes(value, reorder(row,value),color = value>0))+
+  geom_point(show.legend = FALSE)+
+  ggtitle("feature variables")+
+  xlab("Coefficient")+
+  ylab(NULL)
+```
+
+                                       MODELLING
+
+Fitting a Decision Tree
+```{r}
+#Decision tree
+shop_model=shop
+
+shop_model$Revenue<- as.factor(shop_model$Revenue)
+shop_model$Weekend<- as.factor(shop_model$Weekend)
+
+index <- createDataPartition(shop_pred$Revenue, p=0.80, list=FALSE)
+train <-shop_pred[ index,]
+test <- shop_pred[-index,]
+
+# C5.0 Boosted trees
+
+dtree<-C5.0(train,train$Revenue)
+plot(dtree)
+
+p_dtree<-predict(dtree,test)
+
+confusionMatrix(table(p_dtree,test$Revenue))
+Accuracy(p_dtree,test$Revenue)
+
+# C5.0 Decision tree produces 100% accuracy
+a1 = Accuracy(p_dtree, test$Revenue)
+a1
+```
+
+
+KNN Algorithm
+```{r}
+#KNN Algorithm
+shop_model2=shop
+
+shop_model2$Month=as.numeric(shop_model$Month)
+shop_model2$VisitorType=as.numeric(shop_model$VisitorType)
+shop_model2$Weekend=as.numeric(shop_model$Weekend)
+shop_model2$Revenue=as.numeric(shop_model$Revenue) #All the above variables are converted to numeric as KNN takes only numeric inputs
+
+index1 <- createDataPartition(shop_model2$Revenue, p=0.75, list=FALSE)
+train1 <-shop_model2[ index1,]
+test1 <- shop_model2[-index1,]
+
+train1_lab<-train1$Revenue
+test1_lab<-test1$Revenue
+
+normalize <- function(x) {
+ return ((x - min(x)) / (max(x) - min(x)))
+ }
+  #since KNN is a distance based algorithm normalisation of feature values is a must
+shop_model2[1:6]<-lapply(shop_model2[1:6],normalize)
+
+knn_pred<-knn(train1,test1,train1_lab,k=111)
+
+confusionMatrix(table(knn_pred,test1$Revenue))
+a2 = Accuracy(knn_pred,test1$Revenue)
+a2
+```
+
+LOGISTIC REGRESSION
+```{r}
+#Logistic Regression
+shop_model3=shop
+
+index2 <- createDataPartition(shop_model3$Revenue, p=0.75, list=FALSE)
+train2 <-shop_model3[ index2,]
+test2<- shop_model3[-index2,]
+
+lg_mod<-glm(Revenue ~. ,data=train2,family = binomial(link = "logit"))
+
+anova(lg_mod,test = "Chisq")
+
+lg_mod<-glm(Revenue~ Administrative + Informational + ProductRelated + BounceRates + ExitRates + PageValues + SpecialDay +Month + VisitorType,data=train2,family = binomial(link = "logit"))
+
+anova(lg_mod,test = "Chisq")
+
+lg_pred <- predict(lg_mod,newdata = test2,type = "response")
+
+lg_pred=as.numeric(lg_pred)
+
+lg_pred=as.factor(round(lg_pred,0))
+                  
+test2$Revenue=as.numeric(test2$Revenue)
+confusionMatrix(table(lg_pred,test2$Revenue))
+a3 = Accuracy(lg_pred,test2$Revenue)
+a3
+```
+
+Naive bayes algorithm
+```{r}
+#NAIVE BAYES ALGORITHM
+x=train #train & test can be found in the decison tree code block
+y=train$Revenue
+
+model = naiveBayes(x,y)
+p<- predict(model,test,type="class")
+
+confusionMatrix(p,test$Revenue)
+a4 = Accuracy(p,test$Revenue)
+a4
+```
+
+COMPARING MODELS
+```{r}
+#Comparing models
+x = c("KNN","C5.0-Tree","Logistic","Naive-Bayes")
+y = round(c(a2,a1,a3,a4),2)
+
+x_name = "Model"
+y_name = "Accuracy"
+
+df1 = data.frame(x,y)
+names(df1) = c(x_name,y_name)
+
+ggplot(df1, aes(x = Model, y = Accuracy , fill = Model))+
+  geom_bar(stat = "identity")+
+  geom_text(aes(label=Accuracy),position = position_dodge(width = 0.9),vjust = -0.30 )+
+  theme_minimal(base_size = 15)
+```
+
