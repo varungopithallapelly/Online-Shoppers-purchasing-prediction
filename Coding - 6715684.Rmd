@@ -34,7 +34,7 @@ library(RWeka)
 
 ```{r}
 # read in the data
-online_shoppers_intention_1 <- read.csv("C:\\Users\\vt00196\\OneDrive - University of Surrey\\Desktop\\Online Shoppers Prediction\\osi.csv",stringsAsFactors=T)
+online_shoppers_intention_1 
 
 ```
 
