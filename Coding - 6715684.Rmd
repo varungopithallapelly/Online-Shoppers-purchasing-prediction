@@ -103,9 +103,8 @@ barplot
 we can see that the categorical variables are unbalanced. Mainly it can be seen in the target variable.
 `   
 
+frequency & freq plots for cactegorical varibles
 ```{r}
-#frequency & freq plots for cactegorical varibles
-#################################################################
 #In dataset operating system, Browser and region have numerical value by which we can't give proper opinion and analysis the data. so we google top list for operating system, browser and region and replaced that values with these names
 #Here we change Operating system value from numerical to caterogical
 #data is taken from Google. Top Operating systems
