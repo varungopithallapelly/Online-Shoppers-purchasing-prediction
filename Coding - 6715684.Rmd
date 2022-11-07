@@ -111,6 +111,7 @@ we can see that the categorical variables are unbalanced. Mainly it can be seen 
 #data is taken from Google. Top Operating systems
 shopc = shop1
 #"MS-Windows","Ubuntu","Mac OS","Deepin","Free BSD","Chrome OS","CentOS","Debian"
+
 shopc$OperatingSystems[shopc$OperatingSystems == 1] = "MS-Windows"
 shopc$OperatingSystems[shopc$OperatingSystems == 2] = "Ubuntu"
 shopc$OperatingSystems[shopc$OperatingSystems == 3] = "Mac OS"
